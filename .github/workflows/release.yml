@@ -1,0 +1,93 @@
+name: Release Unmark
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout Unmark
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Validate release version
+        run: |
+          set -euo pipefail
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Use a version tag such as v0.1.0 or v1.0.0."
+            exit 1
+          fi
+          echo "UNMARK_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Select Xcode 26.2
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
+          xcodebuild -version
+
+      - name: Build Unmark for Apple Silicon and Intel
+        run: |
+          set -euo pipefail
+          xcodebuild -project Unmark.xcodeproj -scheme Unmark \
+            -configuration Release -destination 'generic/platform=macOS' \
+            -derivedDataPath build \
+            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            MARKETING_VERSION="$UNMARK_VERSION" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" build
+          lipo -verify_arch arm64 x86_64 build/Build/Products/Release/Unmark.app/Contents/MacOS/Unmark
+
+      - name: Package Unmark
+        run: |
+          set -euo pipefail
+          mkdir -p release/staging
+          ditto build/Build/Products/Release/Unmark.app release/staging/Unmark.app
+          # Ad-hoc signing needs no secrets. It is NOT Developer ID signing or notarization.
+          codesign --force --sign - --timestamp=none release/staging/Unmark.app
+          codesign --verify --deep --strict release/staging/Unmark.app
+          ln -s /Applications release/staging/Applications
+          hdiutil create -volname Unmark -srcfolder release/staging \
+            -ov -format UDZO "release/Unmark-${GITHUB_REF_NAME}-universal.dmg"
+          ditto -c -k --sequesterRsrc --keepParent release/staging/Unmark.app \
+            "release/Unmark-${GITHUB_REF_NAME}-universal.zip"
+          cd release
+          shasum -a 256 "Unmark-${GITHUB_REF_NAME}-universal.dmg" \
+            "Unmark-${GITHUB_REF_NAME}-universal.zip" > SHA256SUMS.txt
+          cat > NOTES.md <<'NOTES'
+          Unmark is a local macOS image-cleanup app. These downloads include Apple Silicon and Intel builds and require macOS 15.8 or newer.
+
+          Install FFmpeg and FFprobe separately before using cleanup. See the repository's getting-started guide.
+
+          **Signing:** these builds are ad-hoc signed, not Developer ID signed or notarized. macOS may block first launch. Only proceed if you trust the release; this workflow does not disable or bypass macOS security controls.
+          NOTES
+
+      - name: Create Unmark GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            "release/Unmark-${GITHUB_REF_NAME}-universal.dmg" \
+            "release/Unmark-${GITHUB_REF_NAME}-universal.zip" \
+            release/SHA256SUMS.txt \
+            --verify-tag \
+            --title "Unmark ${GITHUB_REF_NAME}" \
+            --notes-file release/NOTES.md \
+            --generate-notes
