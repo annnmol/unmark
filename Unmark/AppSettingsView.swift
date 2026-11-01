@@ -4,6 +4,15 @@ struct AppSettingsView: View {
     @AppStorage("exportFormat") private var exportFormat = "png"
 
     var body: some View {
+        TabView {
+            exportSettings.tabItem { Label("General", systemImage: "gearshape") }
+            MCPSettingsView().tabItem { Label("AI access", systemImage: "sparkles") }
+        }
+        .frame(width: 640, height: 570)
+        .navigationTitle("Unmark Settings")
+    }
+
+    private var exportSettings: some View {
         Form {
             Section("Export") {
                 Picker("Image format", selection: $exportFormat) {
@@ -23,7 +32,5 @@ struct AppSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 540, height: 400)
-        .navigationTitle("Unmark Settings")
     }
 }

@@ -144,12 +144,7 @@ final class Workspace {
 
     func testTools() async {
         guard !busy, !testing, !closed else { return }
-        let token = OperationCancellation()
-        operation = token
-        testing = true
-        defer { testing = false; cancelling = false; operation = nil }
-        let checked = await CleanupEngine.shared.check(folder: toolFolder, cancellation: token)
-        if !token.isCancelled && !closed { report = checked }
+        _ = try? await checkToolsForAI()
     }
 
     func clean(all: Bool) async {
@@ -255,5 +250,74 @@ final class Workspace {
                 exportReceipt = ExportReceipt(files: outcome.files, notes: outcome.notes.sorted())
             }
         }
+    }
+}
+
+// MCP uses the same workspace and cancellation path as the visible editor.
+extension Workspace {
+    var isClosed: Bool { closed }
+
+    func requireAIIdle() throws {
+        guard !closed else { throw CleanupFailure(message: "This image window was closed. Open an Unmark image window and try again.") }
+        guard !busy, !testing else { throw CleanupFailure(message: "Unmark is busy. Wait or cancel the current operation.") }
+    }
+
+    func checkToolsForAI() async throws -> ToolReport {
+        try requireAIIdle()
+        let token = OperationCancellation()
+        operation = token
+        testing = true
+        defer { testing = false; cancelling = false; operation = nil }
+        let checked = await CleanupEngine.shared.check(folder: toolFolder, cancellation: token)
+        try token.check()
+        guard !closed else { throw CancellationError() }
+        report = checked
+        return checked
+    }
+
+    func cleanForAI(_ id: UUID, mode: String, region: CGRect?) async throws -> ImageItem {
+        try requireAIIdle()
+        guard let before = items.first(where: { $0.id == id }) else { throw CleanupFailure(message: "Image not found.") }
+        selectedID = id
+        updateMode(mode)
+        if let region { updateRegion(region) }
+        error = nil
+        await clean(all: false)
+        guard !closed, let after = items.first(where: { $0.id == id }), after.editCount > before.editCount else {
+            let message = error ?? (report?.ready == false ? report?.message : nil) ?? "Cleanup was cancelled. Previous edits are kept."
+            error = nil
+            throw CleanupFailure(message: message)
+        }
+        return after
+    }
+
+    func exportForAI(_ id: UUID, destination: URL, preference: String?) async throws -> ExportReceipt {
+        try requireAIIdle()
+        guard let item = items.first(where: { $0.id == id }), let result = item.result else {
+            throw CleanupFailure(message: "Clean this image before exporting it.")
+        }
+        let preference = preference ?? exportPreference
+        let format = ImageFormats.output(original: item.source, preference: preference)
+        guard destination.pathExtension.lowercased() == format.fileExtension else {
+            throw CleanupFailure(message: "Use a .\(format.fileExtension) destination for this export. \(format.fallbackReason ?? "")")
+        }
+        let resolved = destination.resolvingSymlinksInPath().standardizedFileURL
+        guard !items.contains(where: { $0.source.resolvingSymlinksInPath().standardizedFileURL == resolved }),
+              !FileManager.default.fileExists(atPath: resolved.path) else {
+            throw CleanupFailure(message: "The destination already exists or is an original image. Choose a new filename.")
+        }
+        let token = OperationCancellation()
+        operation = token; busy = true; activity = "AI: exporting image…"
+        exportReceipt = nil
+        defer { busy = false; cancelling = false; operation = nil; activity = "" }
+        let outcome = await ExportService.shared.save([
+            ExportJob(source: item.source, cleaned: result, destination: destination, preference: preference, replaceExisting: false)
+        ], cancellation: token)
+        guard !closed, !outcome.cancelled else { throw CleanupFailure(message: "Export cancelled.") }
+        if let failure = outcome.failure { throw CleanupFailure(message: failure) }
+        guard !outcome.files.isEmpty else { throw CleanupFailure(message: "No image was saved.") }
+        let receipt = ExportReceipt(files: outcome.files, notes: outcome.notes.sorted())
+        exportReceipt = receipt
+        return receipt
     }
 }

@@ -43,7 +43,13 @@ struct ContentView: View {
             return true
         }
         .overlay { if targeted { RoundedRectangle(cornerRadius: 12).stroke(accent, lineWidth: 3).padding(6).allowsHitTesting(false) } }
-        .background(WindowLifecycle(onClose: { workspace.close() }).frame(width: 0, height: 0))
+        .background(WindowLifecycle(onClose: {
+            MCPAccess.shared.detach(workspace)
+            workspace.close()
+        }, onActivate: { MCPAccess.shared.activate(workspace) }).frame(width: 0, height: 0))
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            MCPAccess.shared.shutdown()
+        }
         .sheet(isPresented: $workspace.showTools) { tools }
         .alert("Something needs attention", isPresented: Binding(get: { workspace.error != nil }, set: { if !$0 { workspace.error = nil } })) {
             Button("OK") { workspace.error = nil }
@@ -203,9 +209,9 @@ struct ContentView: View {
 
     private var footer: some View {
         HStack {
-            Label(workspace.busy ? workspace.activity : "Originals are kept untouched", systemImage: "lock.shield").font(.caption).foregroundStyle(.secondary)
+            Label(workspace.busy ? workspace.activity : (MCPAccess.shared.activity.isEmpty ? "Originals are kept untouched" : MCPAccess.shared.activity), systemImage: "lock.shield").font(.caption).foregroundStyle(.secondary)
             Spacer()
-            if workspace.busy {
+            if workspace.busy || workspace.testing {
                 Button(workspace.cancelling ? "Cancelling…" : "Cancel") { workspace.cancelOperation() }
                     .disabled(workspace.cancelling)
             }

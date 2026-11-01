@@ -2,7 +2,10 @@ import SwiftUI
 
 @main
 struct UnmarkApp: App {
-    init() { TemporaryStorage.clearAbandoned() }
+    init() {
+        TemporaryStorage.clearAbandoned()
+        _ = MCPAccess.shared
+    }
     var body: some Scene {
         WindowGroup {
             ContentView()

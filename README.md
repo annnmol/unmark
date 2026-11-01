@@ -27,4 +27,6 @@ brew install ffmpeg
 
 Open **Tools → Test tools** in Unmark to verify the installation. Then pick or drag images to start cleaning. Each image can be up to **10 MB** and **25 megapixels**.
 
-[Getting started](docs/GETTING_STARTED.md) · [MIT License](LICENSE)
+To connect a local AI app, enable **Settings → AI access** and copy the address and token.
+
+[AI access (MCP)](docs/MCP.md) · [MIT License](LICENSE)
