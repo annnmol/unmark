@@ -20,7 +20,7 @@ The filters list must contain `delogo`. No Node.js or npm dependencies are neede
 
 ## Build and run
 
-1. Download or clone this repository.
+1. Download or clone this repository on an Apple Silicon Mac.
 2. Open `Unmark.xcodeproj` in Xcode 26.2 or newer.
 3. Select the Unmark scheme and My Mac destination.
 4. Select your own signing team if Xcode requests one. No maintainer signing credentials are included.
@@ -31,7 +31,7 @@ To build an unsigned Release app from the repository root:
 ```sh
 xcodebuild -project Unmark.xcodeproj -scheme Unmark \
   -configuration Release -derivedDataPath build \
-  CODE_SIGNING_ALLOWED=NO build
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=NO CODE_SIGNING_ALLOWED=NO build
 ```
 
 The app is generated at `build/Build/Products/Release/Unmark.app`. This command does not create a signed/notarized public release.
@@ -71,13 +71,15 @@ Tool paths and the last check result survive restarts. They are rechecked automa
 - Sign/notarize the distributable with your own Apple credentials and verify it on another Mac.
 - Add screenshots, version-specific release notes, and a downloadable release artifact.
 
-The source repository contains no automated test cases by maintainer preference. The GitHub workflow performs a build only.
+The source repository contains no automated test cases by maintainer preference. The release workflow builds and packages the app without running tests.
 
 ## GitHub release workflow
 
+Only `release.yml` is active. The optional build workflow is kept commented out in `.github/workflows/build.yml.disabled`; uncomment it and rename it to `build.yml` to enable it.
+
 The copied release workflow has been adapted for this root-level Unmark Xcode project. It does not use a `macos/` subfolder, a separate release script, Cogi names, or `create-dmg`.
 
-The build and release workflows use the macOS 26 runner with Xcode 26.2. The release workflow builds a universal app (Apple Silicon and Intel), adds ad-hoc signatures, packages a DMG and ZIP, generates checksums, and publishes the release. It performs no tests.
+The release workflow uses the macOS 26 runner with Xcode 26.2 and builds for Apple Silicon only (`arm64`). The release workflow verifies that no Intel architecture is included, adds ad-hoc signatures, packages a DMG and ZIP, generates checksums, and publishes the release. It performs no tests.
 
 After committing and pushing the source, create and push a version tag:
 
@@ -88,4 +90,4 @@ git push origin v0.1.0
 
 Use a new `vMAJOR.MINOR.PATCH` tag for each release. The tag controls the app version and asset filenames. The workflow uses GitHub's automatically provided token, with `contents: write`; no custom PAT is required. Enable Actions and ensure repository or organization rules allow the workflow to create releases.
 
-These downloadable builds are not Developer ID signed or notarized. For a public release with normal macOS trust, add your own Developer ID certificate and Apple notarization credentials in a separate signing workflow update. Never commit certificates or passwords. The first hosted universal build and downloaded DMG should be checked on both architectures before announcing support; local verification in the development environment covered Apple Silicon only.
+These downloadable builds are not Developer ID signed or notarized. For a public release with normal macOS trust, add your own Developer ID certificate and Apple notarization credentials in a separate signing workflow update. Never commit certificates or passwords. The first hosted build and downloaded DMG should be checked on an Apple Silicon Mac before announcing the release. Intel Macs are not supported. Release downloads use names such as `Unmark-v0.1.0-arm64.dmg` and `Unmark-v0.1.0-arm64.zip`.

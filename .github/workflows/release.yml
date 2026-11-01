@@ -41,17 +41,17 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_26.2.app/Contents/Developer
           xcodebuild -version
 
-      - name: Build Unmark for Apple Silicon and Intel
+      - name: Build Unmark for Apple Silicon
         run: |
           set -euo pipefail
           xcodebuild -project Unmark.xcodeproj -scheme Unmark \
             -configuration Release -destination 'generic/platform=macOS' \
             -derivedDataPath build \
-            ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=NO \
             CODE_SIGNING_ALLOWED=NO \
             MARKETING_VERSION="$UNMARK_VERSION" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" build
-          lipo -verify_arch arm64 x86_64 build/Build/Products/Release/Unmark.app/Contents/MacOS/Unmark
+          test "$(lipo -archs build/Build/Products/Release/Unmark.app/Contents/MacOS/Unmark)" = arm64
 
       - name: Package Unmark
         run: |
@@ -63,14 +63,14 @@ jobs:
           codesign --verify --deep --strict release/staging/Unmark.app
           ln -s /Applications release/staging/Applications
           hdiutil create -volname Unmark -srcfolder release/staging \
-            -ov -format UDZO "release/Unmark-${GITHUB_REF_NAME}-universal.dmg"
+            -ov -format UDZO "release/Unmark-${GITHUB_REF_NAME}-arm64.dmg"
           ditto -c -k --sequesterRsrc --keepParent release/staging/Unmark.app \
-            "release/Unmark-${GITHUB_REF_NAME}-universal.zip"
+            "release/Unmark-${GITHUB_REF_NAME}-arm64.zip"
           cd release
-          shasum -a 256 "Unmark-${GITHUB_REF_NAME}-universal.dmg" \
-            "Unmark-${GITHUB_REF_NAME}-universal.zip" > SHA256SUMS.txt
+          shasum -a 256 "Unmark-${GITHUB_REF_NAME}-arm64.dmg" \
+            "Unmark-${GITHUB_REF_NAME}-arm64.zip" > SHA256SUMS.txt
           cat > NOTES.md <<'NOTES'
-          Unmark is a local macOS image-cleanup app. These downloads include Apple Silicon and Intel builds and require macOS 15.8 or newer.
+          Unmark is a local macOS image-cleanup app. These downloads support Apple Silicon Macs only and require macOS 15.8 or newer.
 
           Install FFmpeg and FFprobe separately before using cleanup. See the repository's getting-started guide.
 
@@ -84,8 +84,8 @@ jobs:
         run: |
           set -euo pipefail
           gh release create "$GITHUB_REF_NAME" \
-            "release/Unmark-${GITHUB_REF_NAME}-universal.dmg" \
-            "release/Unmark-${GITHUB_REF_NAME}-universal.zip" \
+            "release/Unmark-${GITHUB_REF_NAME}-arm64.dmg" \
+            "release/Unmark-${GITHUB_REF_NAME}-arm64.zip" \
             release/SHA256SUMS.txt \
             --verify-tag \
             --title "Unmark ${GITHUB_REF_NAME}" \
