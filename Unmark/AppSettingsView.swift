@@ -7,6 +7,7 @@ struct AppSettingsView: View {
         TabView {
             exportSettings.tabItem { Label("General", systemImage: "gearshape") }
             MCPSettingsView().tabItem { Label("AI access", systemImage: "sparkles") }
+            AboutView().tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 640, height: 570)
         .navigationTitle("Unmark Settings")

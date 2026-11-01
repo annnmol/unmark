@@ -13,7 +13,7 @@ nonisolated enum ImageFormats {
     static let supportedExtensions: Set<String> = ["png", "jpg", "jpeg", "tif", "tiff", "bmp", "heic", "webp"]
 
     static let maximumFileBytes = 10_000_000
-    static let maximumPixels = 210_000_000
+    static let maximumPixels = 25_000_000
 
     static func validateImport(_ url: URL) throws {
         let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
